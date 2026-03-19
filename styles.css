@@ -454,6 +454,7 @@ h2 {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .dashboard-header {
@@ -707,6 +708,14 @@ tbody tr:hover {
   color: #484848;
 }
 
+.batch-action-row td {
+  background: rgba(40, 40, 40, 0.04);
+}
+
+.batch-action-cell {
+  text-align: right;
+}
+
 .text-link-button {
   padding: 0;
   border: 0;
@@ -719,6 +728,53 @@ tbody tr:hover {
   text-decoration-color: rgba(140, 106, 82, 0.45);
   text-underline-offset: 3px;
   cursor: pointer;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(25, 25, 25, 0.12);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #7a5555;
+  cursor: pointer;
+}
+
+.archived-alerts {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(25, 25, 25, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.archived-alerts-header {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.archived-alerts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archived-alert-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(25, 25, 25, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.archived-alerts-empty {
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .movement-in {
