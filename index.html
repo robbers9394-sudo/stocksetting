@@ -64,7 +64,8 @@
         </div>
         <div class="category-stack" id="inventoryCategories"></div>
         <div class="panel-actions">
-          <button id="applyAllButton" class="action-button" type="button">입출고 전체 저장</button>
+          <button id="saveAllInitialButton" class="secondary-button save-button" type="button">재고수정 전체 저장</button>
+          <button id="applyAllButton" class="action-button" type="button">입출고 전체 반영</button>
         </div>
       </section>
 
@@ -172,6 +173,7 @@
           <p class="eyebrow">Alert Table</p>
           <h2>재고 10개 미만 목록</h2>
           <div class="overview-total" id="lowStockSummary"></div>
+          <div class="archived-alerts" id="archivedLowStockList"></div>
           <div class="table-wrap">
             <table class="mini-table">
               <thead>
@@ -182,6 +184,7 @@
                   <th>사이즈</th>
                   <th>현재재고</th>
                   <th>상태</th>
+                  <th>관리</th>
                 </tr>
               </thead>
               <tbody id="lowStockBody"></tbody>
