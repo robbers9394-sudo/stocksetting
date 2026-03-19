@@ -16,6 +16,8 @@ const PRODUCT_DEFINITIONS = [
   { season: "초기시즌", category: "맨투맨", name: "Uprising", color: "기본" },
   { season: "초기시즌", category: "맨투맨", name: "New Wave", color: "기본" },
   { season: "초기시즌", category: "맨투맨", name: "Years and Years Sweatshirt Gray", color: "기본" },
+  { season: "초기시즌", category: "맨투맨", name: "City Like Roses Sweatshirt", color: "Burgundy" },
+  { season: "초기시즌", category: "맨투맨", name: "City Like Roses Sweatshirt", color: "Black" },
 
   { season: "2024", category: "반팔", name: "Years and Years", color: "기본" },
   { season: "2024", category: "반팔", name: "Crowd Psychology (T-shirt)", color: "기본" },
@@ -107,19 +109,25 @@ const PRODUCT_DEFINITIONS = [
   { season: "25SS", category: "반팔", name: "Punk sisters", color: "기본" },
   { season: "25SS", category: "반팔", name: "Hells Bells", color: "기본" },
 
-  { season: "25FW", category: "후드티", name: "Imperfection Layered Hoodie Sleeves", color: "2color" },
+  { season: "25FW", category: "후드티", name: "Imperfection Layered Hoodie Sleeves", color: "Black" },
+  { season: "25FW", category: "후드티", name: "Imperfection Layered Hoodie Sleeves", color: "Brown" },
   { season: "25FW", category: "후드티", name: "Hells Bells Layered Hoodie Sleeves", color: "기본" },
   { season: "25FW", category: "후드티", name: "(Heavy Cotton) Favorite Genre Hoodie", color: "기본" },
-  { season: "25FW", category: "후드티", name: "Defiance Eyes reglan Hoodie", color: "2color" },
+  { season: "25FW", category: "후드티", name: "Defiance Eyes reglan Hoodie", color: "Burgundy" },
+  { season: "25FW", category: "후드티", name: "Defiance Eyes reglan Hoodie", color: "Black" },
   { season: "25FW", category: "후드티", name: "Grunge reglan Hoodie", color: "기본" },
   { season: "25FW", category: "후드티", name: "(Heavy Cotton) Dcrstar Hoodie", color: "기본" },
   { season: "25FW", category: "후드티", name: "[기모] Silver Dcrstar 오버핏 후드티 블랙", color: "기본" },
 
-  { season: "25FW", category: "맨투맨", name: "(Heavy Cotton) Strawberry Fields Forever Sweatshirt", color: "3color" },
+  { season: "25FW", category: "맨투맨", name: "(Heavy Cotton) Strawberry Fields Forever Sweatshirt", color: "Navy" },
+  { season: "25FW", category: "맨투맨", name: "(Heavy Cotton) Strawberry Fields Forever Sweatshirt", color: "Oatmeal" },
+  { season: "25FW", category: "맨투맨", name: "(Heavy Cotton) Strawberry Fields Forever Sweatshirt", color: "Charcoal" },
   { season: "25FW", category: "맨투맨", name: "(Heavy Cotton) Favorite Genre Sweatshirt", color: "기본" },
-  { season: "25FW", category: "맨투맨", name: "Imperfection reglan sweatshirt", color: "2color" },
+  { season: "25FW", category: "맨투맨", name: "Imperfection reglan sweatshirt", color: "Black" },
+  { season: "25FW", category: "맨투맨", name: "Imperfection reglan sweatshirt", color: "Brown" },
   { season: "25FW", category: "맨투맨", name: "Grunge reglan sweatshirt", color: "기본" },
-  { season: "25FW", category: "맨투맨", name: "Overdrive reglan sweatshirt", color: "2color" },
+  { season: "25FW", category: "맨투맨", name: "Overdrive reglan sweatshirt", color: "Navy" },
+  { season: "25FW", category: "맨투맨", name: "Overdrive reglan sweatshirt", color: "Burgundy" },
   { season: "25FW", category: "맨투맨", name: "Zarathustra reglan sweatshirt", color: "기본" },
 
   { season: "공통", category: "잡화류", name: "You are not at fault", color: "기본", sizes: ["S", "M"] },
@@ -210,7 +218,11 @@ const dailyCards = document.getElementById("dailyCards");
 const overviewGrid = document.getElementById("overviewGrid");
 const lowStockBody = document.getElementById("lowStockBody");
 const lowStockSummary = document.getElementById("lowStockSummary");
+const archivedLowStockToggle = document.getElementById("archivedLowStockToggle");
+const archivedLowStockToggleLabel = document.getElementById("archivedLowStockToggleLabel");
 const archivedLowStockList = document.getElementById("archivedLowStockList");
+const lowStockTable = lowStockBody?.closest("table");
+const lowStockHeadRow = lowStockTable?.querySelector("thead tr");
 const transactionDateInput = document.getElementById("transactionDate");
 const dashboardDateInput = document.getElementById("dashboardDate");
 const resetDateButton = document.getElementById("resetDateButton");
@@ -246,6 +258,15 @@ let currentHistoryMonth = "all";
 let remoteSubscription = null;
 let isRemoteRefreshing = false;
 let isAuthenticated = sessionStorage.getItem(AUTH_STORAGE_KEY) === "true";
+let draggedGroupKey = "";
+let dropGroupKey = "";
+let dropPlacement = "before";
+let isPointerDragging = false;
+let isArchivedLowStockOpen = false;
+let currentLowStockSortKey = state.ui?.lowStockSortKey || "stock";
+let currentLowStockSortDirection = state.ui?.lowStockSortDirection || "asc";
+
+initializeLowStockSortHeaders();
 
 function getHistorySnapshot() {
   return {
@@ -283,7 +304,9 @@ function createInitialState() {
       currentPage: "manage",
       currentSeason: "26SS",
       expandedCategory: "",
-      hiddenLowStockEntries: []
+      hiddenLowStockEntries: [],
+      lowStockSortKey: "stock",
+      lowStockSortDirection: "asc"
     }
   };
 }
@@ -347,10 +370,20 @@ function inferItemConfig(meta) {
 
 function isDeprecatedItem(item) {
   const baseName = item.baseName || item.name?.replace(/\s*\([^)]+\)\s*$/, "") || "";
-  return item.season === "공통"
-    && item.category === "잡화류"
-    && baseName === "Rock Band Ball Cap (2color)"
-    && (item.color === "기본" || !item.color);
+  const isDeprecatedPlaceholder = (
+    (baseName === "(Heavy Cotton) Strawberry Fields Forever Sweatshirt" && item.color === "3color")
+    || (baseName === "Imperfection reglan sweatshirt" && item.color === "2color")
+    || (baseName === "Overdrive reglan sweatshirt" && item.color === "2color")
+    || (baseName === "Imperfection Layered Hoodie Sleeves" && item.color === "2color")
+    || (baseName === "Defiance Eyes reglan Hoodie" && item.color === "2color")
+  );
+
+  return isDeprecatedPlaceholder || (
+    item.season === "공통"
+      && item.category === "잡화류"
+      && baseName === "Rock Band Ball Cap (2color)"
+      && (item.color === "기본" || !item.color)
+  );
 }
 
 function createItemFromDefinition(product, index) {
@@ -565,7 +598,9 @@ function loadState() {
         currentPage: parsed.ui?.currentPage || "manage",
         currentSeason: parsed.ui?.currentSeason || "26SS",
         expandedCategory: parsed.ui?.expandedCategory || "",
-        hiddenLowStockEntries: Array.isArray(parsed.ui?.hiddenLowStockEntries) ? parsed.ui.hiddenLowStockEntries : []
+        hiddenLowStockEntries: Array.isArray(parsed.ui?.hiddenLowStockEntries) ? parsed.ui.hiddenLowStockEntries : [],
+        lowStockSortKey: parsed.ui?.lowStockSortKey || "stock",
+        lowStockSortDirection: parsed.ui?.lowStockSortDirection || "asc"
       }
     };
   } catch (error) {
@@ -579,7 +614,9 @@ function saveState() {
     currentPage,
     currentSeason,
     expandedCategory,
-    hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : []
+    hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : [],
+    lowStockSortKey: currentLowStockSortKey,
+    lowStockSortDirection: currentLowStockSortDirection
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   localStorage.setItem(PAGE_STORAGE_KEY, currentPage);
@@ -612,7 +649,10 @@ function mapItemToRemoteRow(item) {
     season: item.season,
     category: item.category,
     one_size: Boolean(item.oneSize),
-    initial_stock: item.initialStock,
+    initial_stock: {
+      ...item.initialStock,
+      __displayOrder: Number.isInteger(item.displayOrder) ? item.displayOrder : null
+    },
     updated_at: new Date().toISOString()
   };
 }
@@ -640,13 +680,15 @@ function mapItemFromRemoteRow(row) {
     sizes: inferredConfig.sizes,
     sizeLabel: inferredConfig.sizeLabel,
     initialStock: normalizeStockMap(row.initial_stock, { sizes: inferredConfig.sizes, oneSize: inferredConfig.sizes.length === 1 && inferredConfig.sizes[0] === ONE_SIZE }),
-    displayOrder: definitionMeta?.displayOrder ?? PRODUCT_DEFINITIONS.findIndex((product) => {
+    displayOrder: Number.isInteger(row.initial_stock?.__displayOrder)
+      ? row.initial_stock.__displayOrder
+      : (definitionMeta?.displayOrder ?? PRODUCT_DEFINITIONS.findIndex((product) => {
       const productSizeInfo = getInlineSizeInfo(product.name, product.category, Boolean(product.oneSize));
       return product.season === row.season
         && product.category === row.category
         && productSizeInfo.displayName === sizeInfo.displayName
         && product.color === row.color;
-    })
+    }))
   };
 }
 
@@ -864,11 +906,15 @@ function getItemTotalStock(itemId) {
   return getItemSizes(item).reduce((sum, size) => sum + getCurrentStock(itemId, size), 0);
 }
 
+function getItemGroupKey(item) {
+  return item.familyName || item.baseName || getFamilyName(item.name || "");
+}
+
 function sortItemsForDisplay(items) {
   const groups = new Map();
 
   items.forEach((item) => {
-    const groupKey = item.familyName || item.baseName || getFamilyName(item.name || "");
+    const groupKey = getItemGroupKey(item);
     const displayOrder = Number.isInteger(item.displayOrder) && item.displayOrder >= 0
       ? item.displayOrder
       : Number.MAX_SAFE_INTEGER;
@@ -900,8 +946,8 @@ function getRowGroupClass(previousItem, currentItem, season, category) {
     return "";
   }
 
-  const previousGroup = previousItem.familyName || previousItem.baseName || getFamilyName(previousItem.name || "");
-  const currentGroup = currentItem.familyName || currentItem.baseName || getFamilyName(currentItem.name || "");
+  const previousGroup = getItemGroupKey(previousItem);
+  const currentGroup = getItemGroupKey(currentItem);
 
   return previousGroup !== currentGroup ? "design-group-start" : "";
 }
@@ -919,6 +965,103 @@ function getLatestTransaction(itemId) {
   return state.transactions
     .filter((transaction) => transaction.itemId === itemId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
+function getActiveManageItems() {
+  const groupedItems = CATEGORY_ORDER.map((category) => {
+    const seasonBlocks = getSeasonBlocksForCategory(category);
+    const items = seasonBlocks.flatMap((group) => group.items);
+    return { category, seasonBlocks, items };
+  }).filter((group) => group.items.length > 0);
+
+  const activeCategory = groupedItems.find((group) => group.category === expandedCategory) || groupedItems[0];
+  if (!activeCategory) {
+    return [];
+  }
+
+  if (activeCategory.category === "잡화류") {
+    return activeCategory.items;
+  }
+
+  return activeCategory.seasonBlocks.find((seasonBlock) => seasonBlock.season === currentSeason)?.items || [];
+}
+
+async function reorderVisibleGroups(draggedKey, targetKey, placement = "before") {
+  if (!draggedKey || !targetKey || draggedKey === targetKey) {
+    return;
+  }
+
+  const visibleItems = getActiveManageItems();
+  if (visibleItems.length === 0) {
+    return;
+  }
+
+  const groups = [];
+  visibleItems.forEach((item) => {
+    const groupKey = getItemGroupKey(item);
+    const lastGroup = groups[groups.length - 1];
+
+    if (!lastGroup || lastGroup.key !== groupKey) {
+      groups.push({ key: groupKey, items: [item] });
+      return;
+    }
+
+    lastGroup.items.push(item);
+  });
+
+  const draggedIndex = groups.findIndex((group) => group.key === draggedKey);
+  const targetIndex = groups.findIndex((group) => group.key === targetKey);
+
+  if (draggedIndex === -1 || targetIndex === -1) {
+    return;
+  }
+
+  const [draggedGroup] = groups.splice(draggedIndex, 1);
+  let nextTargetIndex = targetIndex;
+
+  if (draggedIndex < targetIndex) {
+    nextTargetIndex -= 1;
+  }
+
+  groups.splice(placement === "after" ? nextTargetIndex + 1 : nextTargetIndex, 0, draggedGroup);
+
+  const reorderedItems = groups.flatMap((group) => group.items);
+  const baseOrder = visibleItems.reduce((min, item) => {
+    const order = Number.isInteger(item.displayOrder) && item.displayOrder >= 0 ? item.displayOrder : Number.MAX_SAFE_INTEGER;
+    return Math.min(min, order);
+  }, Number.MAX_SAFE_INTEGER);
+  const startOrder = Number.isFinite(baseOrder) && baseOrder !== Number.MAX_SAFE_INTEGER ? baseOrder : 0;
+  const orderMap = new Map(reorderedItems.map((item, index) => [item.id, startOrder + index]));
+
+  state.items = state.items.map((item) => (
+    orderMap.has(item.id) ? { ...item, displayOrder: orderMap.get(item.id) } : item
+  ));
+
+  draggedGroupKey = "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  saveState();
+  render();
+
+  try {
+    await syncItemsToRemote(state.items);
+  } catch (error) {
+    console.error("Failed to sync reordered items", error);
+    window.alert("순서 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해 주세요.");
+  }
+}
+
+function updateDragPreviewClasses() {
+  inventoryCategories.querySelectorAll("tr[data-group-key]").forEach((row) => {
+    if (!(row instanceof HTMLElement)) {
+      return;
+    }
+
+    const groupKey = row.dataset.groupKey || "";
+    row.classList.toggle("is-dragging", Boolean(draggedGroupKey) && groupKey === draggedGroupKey);
+    row.classList.toggle("is-drop-target-before", Boolean(dropGroupKey) && groupKey === dropGroupKey && dropPlacement === "before");
+    row.classList.toggle("is-drop-target-after", Boolean(dropGroupKey) && groupKey === dropGroupKey && dropPlacement === "after");
+  });
 }
 
 function formatDate(dateString) {
@@ -1141,6 +1284,10 @@ function buildManageRowsV2(items, season, category) {
   return items.map((item, index) => {
     const previousItem = items[index - 1];
     const rowClass = getRowGroupClass(previousItem, item, season, category);
+    const groupKey = getItemGroupKey(item);
+    const isDragSource = draggedGroupKey && draggedGroupKey === groupKey;
+    const isDropTarget = dropGroupKey && dropGroupKey === groupKey && draggedGroupKey !== groupKey;
+    const dragClassName = `${rowClass} inventory-row-draggable${isDragSource ? " is-dragging" : ""}${isDropTarget ? ` is-drop-target-${dropPlacement}` : ""}`.trim();
     const itemSizes = getItemSizes(item);
     const isSingleSize = itemSizes.length === 1;
     const singleSize = isSingleSize ? itemSizes[0] : null;
@@ -1262,8 +1409,13 @@ function buildManageRowsV2(items, season, category) {
     }
 
     return `
-      <tr class="${rowClass}">
-        <td class="inventory-name">${item.name}</td>
+      <tr class="${dragClassName}" draggable="true" data-item-id="${item.id}" data-group-key="${groupKey}">
+        <td class="inventory-name">
+          <div class="inventory-name-inner">
+            <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+            <span>${item.name}</span>
+          </div>
+        </td>
         ${initialCells}
         <td class="cell-initial">
           <button class="secondary-button save-button" type="button" data-action="save-initial" data-item-id="${item.id}">저장</button>
@@ -1585,6 +1737,87 @@ function setHiddenLowStockEntries(entries) {
   };
 }
 
+function initializeLowStockSortHeaders() {
+  if (!lowStockHeadRow) {
+    return;
+  }
+
+  lowStockHeadRow.innerHTML = `
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="category"><span>카테고리</span><span class="sort-arrows">↑↓</span></button></th>
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="season"><span>구분</span><span class="sort-arrows">↑↓</span></button></th>
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="name"><span>품목명</span><span class="sort-arrows">↑↓</span></button></th>
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="size"><span>사이즈</span><span class="sort-arrows">↑↓</span></button></th>
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="stock"><span>현재재고</span><span class="sort-arrows">↑↓</span></button></th>
+    <th><button class="sort-header-button" type="button" data-low-stock-sort="status"><span>상태</span><span class="sort-arrows">↑↓</span></button></th>
+    <th>관리</th>
+  `;
+}
+
+function compareTextForSort(left, right) {
+  return String(left).localeCompare(String(right), "ko");
+}
+
+function getLowStockSortValue(entry, key) {
+  switch (key) {
+    case "category":
+      return entry.item.category;
+    case "season":
+      return entry.item.season;
+    case "name":
+      return entry.item.name;
+    case "size":
+      return getSizeLabel(entry.size, entry.item);
+    case "status":
+      return entry.stock < 10 ? "주의" : "정상";
+    case "stock":
+    default:
+      return entry.stock;
+  }
+}
+
+function compareLowStockEntries(left, right) {
+  const direction = currentLowStockSortDirection === "desc" ? -1 : 1;
+  const leftValue = getLowStockSortValue(left, currentLowStockSortKey);
+  const rightValue = getLowStockSortValue(right, currentLowStockSortKey);
+
+  let primaryComparison = 0;
+
+  if (typeof leftValue === "number" && typeof rightValue === "number") {
+    primaryComparison = leftValue - rightValue;
+  } else {
+    primaryComparison = compareTextForSort(leftValue, rightValue);
+  }
+
+  if (primaryComparison !== 0) {
+    return primaryComparison * direction;
+  }
+
+  return (
+    (left.stock - right.stock)
+    || compareTextForSort(left.item.category, right.item.category)
+    || compareTextForSort(left.item.season, right.item.season)
+    || compareTextForSort(left.item.name, right.item.name)
+    || compareTextForSort(getSizeLabel(left.size, left.item), getSizeLabel(right.size, right.item))
+  );
+}
+
+function updateLowStockSortButtons() {
+  document.querySelectorAll("[data-low-stock-sort]").forEach((button) => {
+    const isActive = button.dataset.lowStockSort === currentLowStockSortKey;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+    const arrows = button.querySelector(".sort-arrows");
+
+    if (!arrows) {
+      return;
+    }
+
+    arrows.textContent = isActive
+      ? currentLowStockSortDirection === "desc" ? "↓" : "↑"
+      : "↑↓";
+  });
+}
+
 function buildLowStockPage() {
   const rows = state.items.flatMap((item) => (
     getItemSizes(item).map((size) => ({
@@ -1594,7 +1827,7 @@ function buildLowStockPage() {
       key: getLowStockEntryKey(item.id, size)
     }))
   )).filter((entry) => entry.item.category !== "아울렛" && entry.stock < 10)
-    .sort((a, b) => a.stock - b.stock || a.item.category.localeCompare(b.item.category) || a.item.name.localeCompare(b.item.name));
+    .sort(compareLowStockEntries);
 
   const hiddenKeys = new Set(getHiddenLowStockEntries());
   const archivedRows = rows.filter((entry) => hiddenKeys.has(entry.key));
@@ -1605,6 +1838,14 @@ function buildLowStockPage() {
     : archivedRows.length > 0
       ? `보이는 재고 주의 품목 없음 · 숨김 ${archivedRows.length}건`
       : "현재 재고 주의 품목이 없습니다.";
+
+  archivedLowStockToggleLabel.textContent = archivedRows.length > 0
+    ? `숨김 품목 ${archivedRows.length}건`
+    : "숨김 품목 보기";
+  archivedLowStockToggle.setAttribute("aria-expanded", String(isArchivedLowStockOpen));
+  archivedLowStockToggle.disabled = archivedRows.length === 0;
+  archivedLowStockList.hidden = !isArchivedLowStockOpen || archivedRows.length === 0;
+  updateLowStockSortButtons();
 
   archivedLowStockList.innerHTML = archivedRows.length > 0
     ? `
@@ -2022,6 +2263,168 @@ inventoryCategories.addEventListener("click", (event) => {
   }
 });
 
+inventoryCategories.addEventListener("dragstart", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!rawTarget.closest(".inventory-name")) {
+    return;
+  }
+
+  const row = rawTarget.closest("tr[data-group-key]");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  draggedGroupKey = row.dataset.groupKey || "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  updateDragPreviewClasses();
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedGroupKey);
+  }
+});
+
+inventoryCategories.addEventListener("dragover", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement) || !draggedGroupKey) {
+    return;
+  }
+
+  const row = rawTarget.closest("tr[data-group-key]");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  const targetGroupKey = row.dataset.groupKey || "";
+  if (!targetGroupKey || targetGroupKey === draggedGroupKey) {
+    return;
+  }
+
+  event.preventDefault();
+  const rect = row.getBoundingClientRect();
+  const offset = event.clientY - rect.top;
+  dropGroupKey = targetGroupKey;
+  dropPlacement = offset > rect.height / 2 ? "after" : "before";
+  updateDragPreviewClasses();
+});
+
+inventoryCategories.addEventListener("drop", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement) || !draggedGroupKey) {
+    return;
+  }
+
+  const row = rawTarget.closest("tr[data-group-key]");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  event.preventDefault();
+  const targetGroupKey = row.dataset.groupKey || "";
+  const placement = dropPlacement;
+  const sourceGroupKey = draggedGroupKey;
+  draggedGroupKey = "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  void reorderVisibleGroups(sourceGroupKey, targetGroupKey, placement);
+});
+
+inventoryCategories.addEventListener("dragend", () => {
+  if (!draggedGroupKey && !dropGroupKey) {
+    return;
+  }
+
+  draggedGroupKey = "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  updateDragPreviewClasses();
+});
+
+inventoryCategories.addEventListener("mousedown", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement) || event.button !== 0) {
+    return;
+  }
+
+  const nameCell = rawTarget.closest(".inventory-name");
+  if (!(nameCell instanceof HTMLElement)) {
+    return;
+  }
+
+  const row = nameCell.closest("tr[data-group-key]");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  draggedGroupKey = row.dataset.groupKey || "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  isPointerDragging = Boolean(draggedGroupKey);
+  updateDragPreviewClasses();
+});
+
+inventoryCategories.addEventListener("mousemove", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement) || !isPointerDragging || !draggedGroupKey || event.buttons !== 1) {
+    return;
+  }
+
+  const row = rawTarget.closest("tr[data-group-key]");
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  const targetGroupKey = row.dataset.groupKey || "";
+  if (!targetGroupKey || targetGroupKey === draggedGroupKey) {
+    return;
+  }
+
+  const rect = row.getBoundingClientRect();
+  const offset = event.clientY - rect.top;
+  dropGroupKey = targetGroupKey;
+  dropPlacement = offset > rect.height / 2 ? "after" : "before";
+  updateDragPreviewClasses();
+});
+
+inventoryCategories.addEventListener("mouseup", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement) || !isPointerDragging || !draggedGroupKey) {
+    return;
+  }
+
+  const row = rawTarget.closest("tr[data-group-key]");
+  const sourceGroupKey = draggedGroupKey;
+  const targetGroupKey = row instanceof HTMLElement ? (row.dataset.groupKey || "") : "";
+  const placement = dropPlacement;
+
+  isPointerDragging = false;
+  draggedGroupKey = "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  updateDragPreviewClasses();
+
+  if (targetGroupKey && targetGroupKey !== sourceGroupKey) {
+    void reorderVisibleGroups(sourceGroupKey, targetGroupKey, placement);
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  if (!isPointerDragging && !draggedGroupKey && !dropGroupKey) {
+    return;
+  }
+
+  isPointerDragging = false;
+  draggedGroupKey = "";
+  dropGroupKey = "";
+  dropPlacement = "before";
+  updateDragPreviewClasses();
+});
+
 saveAllInitialButton.addEventListener("click", async () => {
   await saveInitialStockForItems(getVisibleInventoryItemIds());
 });
@@ -2067,6 +2470,35 @@ historyMonthSelect.addEventListener("change", () => {
   currentHistoryMonth = historyMonthSelect.value || "all";
   buildHistoryTable();
 });
+
+if (lowStockHeadRow) {
+  lowStockHeadRow.addEventListener("click", (event) => {
+    const rawTarget = event.target;
+    if (!(rawTarget instanceof HTMLElement)) {
+      return;
+    }
+
+    const button = rawTarget.closest("[data-low-stock-sort]");
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+
+    const nextKey = button.dataset.lowStockSort;
+    if (!nextKey) {
+      return;
+    }
+
+    if (currentLowStockSortKey === nextKey) {
+      currentLowStockSortDirection = currentLowStockSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      currentLowStockSortKey = nextKey;
+      currentLowStockSortDirection = "asc";
+    }
+
+    saveState();
+    buildLowStockPage();
+  });
+}
 
 lowStockBody.addEventListener("click", (event) => {
   const rawTarget = event.target;
@@ -2125,6 +2557,15 @@ archivedLowStockList.addEventListener("click", (event) => {
     getHiddenLowStockEntries().filter((entry) => entry !== getLowStockEntryKey(itemId, size))
   );
   saveState();
+  buildLowStockPage();
+});
+
+archivedLowStockToggle.addEventListener("click", () => {
+  if (archivedLowStockToggle.disabled) {
+    return;
+  }
+
+  isArchivedLowStockOpen = !isArchivedLowStockOpen;
   buildLowStockPage();
 });
 
