@@ -244,6 +244,8 @@ const supabaseClient = window.supabase && supabaseConfig.supabaseUrl && supabase
   : null;
 const REMOTE_ITEMS_TABLE = "inventory_items";
 const REMOTE_TRANSACTIONS_TABLE = "inventory_transactions";
+const REMOTE_UI_TABLE = "inventory_app_state";
+const REMOTE_UI_ROW_ID = "shared";
 
 const today = getToday();
 transactionDateInput.value = today;
@@ -759,6 +761,49 @@ async function deleteTransactionsFromRemote(ids) {
   }
 }
 
+async function syncUiStateToRemote() {
+  if (!isRemoteMode()) {
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from(REMOTE_UI_TABLE)
+    .upsert({
+      id: REMOTE_UI_ROW_ID,
+      hidden_low_stock_entries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : [],
+      updated_at: new Date().toISOString()
+    }, { onConflict: "id" });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function loadRemoteUiState() {
+  const { data, error } = await supabaseClient
+    .from(REMOTE_UI_TABLE)
+    .select("*")
+    .eq("id", REMOTE_UI_ROW_ID)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (data) {
+    return {
+      hiddenLowStockEntries: Array.isArray(data.hidden_low_stock_entries) ? data.hidden_low_stock_entries : []
+    };
+  }
+
+  const fallbackUi = {
+    hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : []
+  };
+
+  await syncUiStateToRemote();
+  return fallbackUi;
+}
+
 async function loadRemoteState() {
   const { data: itemRows, error: itemsError } = await supabaseClient
     .from(REMOTE_ITEMS_TABLE)
@@ -799,10 +844,15 @@ async function loadRemoteState() {
     throw transactionsError;
   }
 
+  const remoteUi = await loadRemoteUiState();
+
   return {
     items,
     transactions: (transactionRows || []).map(mapTransactionFromRemoteRow),
-    ui: state.ui || createInitialState().ui
+    ui: {
+      ...(state.ui || createInitialState().ui),
+      hiddenLowStockEntries: remoteUi.hiddenLowStockEntries
+    }
   };
 }
 
@@ -821,7 +871,9 @@ async function refreshRemoteState() {
         currentPage,
         currentSeason,
         expandedCategory,
-        hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : []
+        hiddenLowStockEntries: Array.isArray(remoteState.ui?.hiddenLowStockEntries) ? remoteState.ui.hiddenLowStockEntries : [],
+        lowStockSortKey: currentLowStockSortKey,
+        lowStockSortDirection: currentLowStockSortDirection
       }
     };
     render();
@@ -843,6 +895,9 @@ function subscribeRemoteState() {
       void refreshRemoteState();
     })
     .on("postgres_changes", { event: "*", schema: "public", table: REMOTE_TRANSACTIONS_TABLE }, () => {
+      void refreshRemoteState();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: REMOTE_UI_TABLE }, () => {
       void refreshRemoteState();
     })
     .subscribe();
@@ -1735,6 +1790,14 @@ function setHiddenLowStockEntries(entries) {
     ...(state.ui || {}),
     hiddenLowStockEntries: [...new Set(entries)]
   };
+
+  saveState();
+
+  if (isRemoteMode()) {
+    void syncUiStateToRemote().catch((error) => {
+      console.error("Failed to sync hidden low stock entries", error);
+    });
+  }
 }
 
 function initializeLowStockSortHeaders() {
@@ -2519,7 +2582,6 @@ lowStockBody.addEventListener("click", (event) => {
     }
 
     setHiddenLowStockEntries([...getHiddenLowStockEntries(), getLowStockEntryKey(itemId, size)]);
-    saveState();
     buildLowStockPage();
     return;
   }
@@ -2556,7 +2618,6 @@ archivedLowStockList.addEventListener("click", (event) => {
   setHiddenLowStockEntries(
     getHiddenLowStockEntries().filter((entry) => entry !== getLowStockEntryKey(itemId, size))
   );
-  saveState();
   buildLowStockPage();
 });
 
