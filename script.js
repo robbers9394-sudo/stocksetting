@@ -9,7 +9,7 @@ const SIZES = ["M", "L"];
 const ONE_SIZE = "OS";
 const PRODUCT_DEFINITIONS = [
   { season: "초기시즌", category: "반팔", name: "What you looking at", color: "기본" },
-  { season: "초기시즌", category: "반팔", name: "Glory youth Crop T-Shirts", color: "기본" },
+  { season: "초기시즌", category: "반팔", name: "Glory youth Crop T-Shirts", color: "기본", oneSize: true },
   { season: "초기시즌", category: "반팔", name: "V.C.R", color: "기본" },
   { season: "초기시즌", category: "반팔", name: "Always Open", color: "기본" },
   { season: "초기시즌", category: "반팔", name: "Album 1.", color: "기본" },
@@ -210,9 +210,11 @@ const dailyCards = document.getElementById("dailyCards");
 const overviewGrid = document.getElementById("overviewGrid");
 const lowStockBody = document.getElementById("lowStockBody");
 const lowStockSummary = document.getElementById("lowStockSummary");
+const archivedLowStockList = document.getElementById("archivedLowStockList");
 const transactionDateInput = document.getElementById("transactionDate");
 const dashboardDateInput = document.getElementById("dashboardDate");
 const resetDateButton = document.getElementById("resetDateButton");
+const saveAllInitialButton = document.getElementById("saveAllInitialButton");
 const applyAllButton = document.getElementById("applyAllButton");
 const historyYearSelect = document.getElementById("historyYear");
 const historyMonthSelect = document.getElementById("historyMonth");
@@ -280,7 +282,8 @@ function createInitialState() {
     ui: {
       currentPage: "manage",
       currentSeason: "26SS",
-      expandedCategory: ""
+      expandedCategory: "",
+      hiddenLowStockEntries: []
     }
   };
 }
@@ -561,7 +564,8 @@ function loadState() {
       ui: {
         currentPage: parsed.ui?.currentPage || "manage",
         currentSeason: parsed.ui?.currentSeason || "26SS",
-        expandedCategory: parsed.ui?.expandedCategory || ""
+        expandedCategory: parsed.ui?.expandedCategory || "",
+        hiddenLowStockEntries: Array.isArray(parsed.ui?.hiddenLowStockEntries) ? parsed.ui.hiddenLowStockEntries : []
       }
     };
   } catch (error) {
@@ -574,7 +578,8 @@ function saveState() {
   state.ui = {
     currentPage,
     currentSeason,
-    expandedCategory
+    expandedCategory,
+    hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : []
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   localStorage.setItem(PAGE_STORAGE_KEY, currentPage);
@@ -773,7 +778,8 @@ async function refreshRemoteState() {
       ui: {
         currentPage,
         currentSeason,
-        expandedCategory
+        expandedCategory,
+        hiddenLowStockEntries: Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : []
       }
     };
     render();
@@ -1013,7 +1019,7 @@ function buildManageRows(items, season, category) {
     </td>
   `;
 
-  return items.map((item, index) => {
+  const itemRows = items.map((item, index) => {
     const previousItem = items[index - 1];
     const rowClass = getRowGroupClass(previousItem, item, season, category);
     const itemSizes = getItemSizes(item);
@@ -1111,6 +1117,17 @@ function buildManageRows(items, season, category) {
       </tr>
     `;
   }).join("");
+
+  const footerRow = `
+    <tr class="batch-action-row">
+      <td class="inventory-name">입력한 입출고를 한 번에 저장</td>
+      <td class="cell-stock group-start batch-action-cell" colspan="12">
+        <button class="action-button" type="button" data-action="apply-all-rows">입출고 전체 저장</button>
+      </td>
+    </tr>
+  `;
+
+  return `${itemRows}${footerRow}`;
 }
 
 function buildManageRowsV2(items, season, category) {
@@ -1553,26 +1570,61 @@ function buildOverviewPage() {
   `;
 }
 
+function getLowStockEntryKey(itemId, size) {
+  return `${itemId}::${size}`;
+}
+
+function getHiddenLowStockEntries() {
+  return Array.isArray(state.ui?.hiddenLowStockEntries) ? state.ui.hiddenLowStockEntries : [];
+}
+
+function setHiddenLowStockEntries(entries) {
+  state.ui = {
+    ...(state.ui || {}),
+    hiddenLowStockEntries: [...new Set(entries)]
+  };
+}
+
 function buildLowStockPage() {
   const rows = state.items.flatMap((item) => (
     getItemSizes(item).map((size) => ({
       item,
       size,
-      stock: getCurrentStock(item.id, size)
+      stock: getCurrentStock(item.id, size),
+      key: getLowStockEntryKey(item.id, size)
     }))
   )).filter((entry) => entry.item.category !== "아울렛" && entry.stock < 10)
     .sort((a, b) => a.stock - b.stock || a.item.category.localeCompare(b.item.category) || a.item.name.localeCompare(b.item.name));
 
-  lowStockSummary.textContent = rows.length > 0
-    ? `재고 주의 ${rows.length}건 · 기준 10개 미만`
-    : "현재 재고 주의 품목이 없습니다.";
+  const hiddenKeys = new Set(getHiddenLowStockEntries());
+  const archivedRows = rows.filter((entry) => hiddenKeys.has(entry.key));
+  const visibleRows = rows.filter((entry) => !hiddenKeys.has(entry.key));
 
-  if (rows.length === 0) {
-    lowStockBody.innerHTML = `<tr><td class="empty-state" colspan="6">현재 재고 10개 미만 품목이 없습니다.</td></tr>`;
+  lowStockSummary.textContent = visibleRows.length > 0
+    ? `재고 주의 ${visibleRows.length}건 · 숨김 ${archivedRows.length}건 · 기준 10개 미만`
+    : archivedRows.length > 0
+      ? `보이는 재고 주의 품목 없음 · 숨김 ${archivedRows.length}건`
+      : "현재 재고 주의 품목이 없습니다.";
+
+  archivedLowStockList.innerHTML = archivedRows.length > 0
+    ? `
+      <div class="archived-alerts-header">숨김 처리한 품목</div>
+      <div class="archived-alerts-list">
+        ${archivedRows.map(({ item, size }) => `
+          <button class="archived-alert-chip" type="button" data-action="restore-low-stock" data-item-id="${item.id}" data-size="${size}">
+            ${item.name} · ${getSizeLabel(size, item)} · 복원
+          </button>
+        `).join("")}
+      </div>
+    `
+    : `<div class="archived-alerts-empty">숨김 처리한 품목이 없습니다.</div>`;
+
+  if (visibleRows.length === 0) {
+    lowStockBody.innerHTML = `<tr><td class="empty-state" colspan="7">현재 재고 10개 미만 품목이 없습니다.</td></tr>`;
     return;
   }
 
-  lowStockBody.innerHTML = rows.map(({ item, size, stock }) => `
+  lowStockBody.innerHTML = visibleRows.map(({ item, size, stock }) => `
     <tr>
       <td>${item.category}</td>
       <td>${item.category === "아울렛" ? item.season : item.season}</td>
@@ -1584,6 +1636,9 @@ function buildLowStockPage() {
       <td>${getSizeLabel(size, item)}</td>
       <td><span class="stock-chip low">${stock}</span></td>
       <td class="movement-out">주의</td>
+      <td>
+        <button class="icon-button" type="button" data-action="hide-low-stock" data-item-id="${item.id}" data-size="${size}" aria-label="숨김 처리">🗑</button>
+      </td>
     </tr>
   `).join("");
 }
@@ -1893,6 +1948,39 @@ async function saveInitialStock(itemId) {
   render();
 }
 
+async function saveInitialStockForItems(itemIds) {
+  const nextItems = [...state.items];
+
+  for (const itemId of itemIds) {
+    const itemIndex = nextItems.findIndex((entry) => entry.id === itemId);
+    if (itemIndex === -1) {
+      continue;
+    }
+
+    const item = nextItems[itemIndex];
+    const nextStock = {};
+
+    for (const size of getItemSizes(item)) {
+      const input = document.querySelector(`input[data-item-id="${itemId}"][data-input-type="initial"][data-size="${size}"]`);
+      const value = Number(input?.value ?? item.initialStock[size]);
+
+      if (!Number.isInteger(value) || value < 0) {
+        window.alert("초기재고는 0 이상의 정수만 입력할 수 있습니다.");
+        return;
+      }
+
+      nextStock[size] = value;
+    }
+
+    nextItems[itemIndex] = { ...item, initialStock: nextStock };
+  }
+
+  state.items = nextItems;
+  await syncItemsToRemote(state.items);
+  saveState();
+  render();
+}
+
 async function addTransaction(itemId) {
   await applyTransactionsForItems([itemId], "입고 또는 출고 수량을 입력해 주세요.");
 }
@@ -1923,12 +2011,26 @@ inventoryCategories.addEventListener("click", (event) => {
 
   if (target.dataset.action === "apply") {
     void addTransaction(target.dataset.itemId);
+    return;
+  }
+
+  if (target.dataset.action === "apply-all-rows") {
+    void applyTransactionsForItems(
+      getVisibleInventoryItemIds(),
+      "현재 화면에서 저장할 입고/출고 수량이 없습니다."
+    );
   }
 });
 
+saveAllInitialButton.addEventListener("click", async () => {
+  await saveInitialStockForItems(getVisibleInventoryItemIds());
+});
+
 applyAllButton.addEventListener("click", async () => {
-  const itemIds = getVisibleInventoryItemIds();
-  await applyTransactionsForItems(itemIds, "현재 화면에서 저장할 입고/출고 수량이 없습니다.");
+  await applyTransactionsForItems(
+    getVisibleInventoryItemIds(),
+    "현재 화면에서 저장할 입고/출고 수량이 없습니다."
+  );
 });
 
 document.addEventListener("click", (event) => {
@@ -1972,8 +2074,21 @@ lowStockBody.addEventListener("click", (event) => {
     return;
   }
 
-  const target = rawTarget.closest("[data-action='open-overview-item']");
+  const target = rawTarget.closest("[data-action='open-overview-item'], [data-action='hide-low-stock']");
   if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  if (target.dataset.action === "hide-low-stock") {
+    const itemId = target.dataset.itemId;
+    const size = target.dataset.size;
+    if (!itemId || !size) {
+      return;
+    }
+
+    setHiddenLowStockEntries([...getHiddenLowStockEntries(), getLowStockEntryKey(itemId, size)]);
+    saveState();
+    buildLowStockPage();
     return;
   }
 
@@ -1987,6 +2102,30 @@ lowStockBody.addEventListener("click", (event) => {
   currentPage = "overview";
   render();
   syncBrowserHistory("push");
+});
+
+archivedLowStockList.addEventListener("click", (event) => {
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof HTMLElement)) {
+    return;
+  }
+
+  const target = rawTarget.closest("[data-action='restore-low-stock']");
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const itemId = target.dataset.itemId;
+  const size = target.dataset.size;
+  if (!itemId || !size) {
+    return;
+  }
+
+  setHiddenLowStockEntries(
+    getHiddenLowStockEntries().filter((entry) => entry !== getLowStockEntryKey(itemId, size))
+  );
+  saveState();
+  buildLowStockPage();
 });
 
 prevPageButton.addEventListener("click", () => {
