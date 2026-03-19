@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>재고관리 대시보드</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="auth-overlay" id="authOverlay">
+    <form class="auth-card" id="authForm">
+      <p class="eyebrow">Private Access</p>
+      <h1 class="auth-title">재고관리 페이지</h1>
+      <p class="auth-copy">비밀번호를 입력해야 페이지를 확인하고 수정할 수 있습니다.</p>
+      <label class="field" for="passwordInput">
+        <span>비밀번호</span>
+        <input id="passwordInput" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="auth-error" id="authError" hidden>비밀번호가 올바르지 않습니다.</p>
+      <button class="ghost-button auth-button" type="submit">입장</button>
+    </form>
+  </div>
+  <main class="app-shell">
+    <div class="page-nav">
+      <button id="prevPageButton" class="nav-arrow" type="button" aria-label="이전 페이지">←</button>
+      <div class="page-indicator">
+        <span id="pageLabel">1페이지 · 입출고 관리</span>
+      </div>
+      <button id="nextPageButton" class="nav-arrow" type="button" aria-label="다음 페이지">→</button>
+    </div>
+
+    <section class="app-page is-active" data-page="manage">
+      <section class="hero-panel">
+        <div>
+          <p class="eyebrow">Inventory Control</p>
+          <h1>의류 재고관리 대시보드</h1>
+          <p class="hero-copy">
+            입고는 `+`, 출고는 `-`로 반영합니다. 모든 내역은 브라우저에 저장되며
+            PC 화면 기준으로 빠르게 관리할 수 있습니다.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <label class="field">
+            <span>처리 일자</span>
+            <input id="transactionDate" type="date">
+          </label>
+
+          <button id="resetDateButton" class="ghost-button" type="button">선택 일자 기록 초기화</button>
+        </div>
+      </section>
+
+      <section class="summary-grid" id="summaryGrid"></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Stock Table</p>
+            <h2>카테고리별 입출고 처리</h2>
+          </div>
+        </div>
+        <div class="category-stack" id="inventoryCategories"></div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-header dashboard-header">
+            <div>
+              <p class="eyebrow">Daily Board</p>
+              <h2>일자별 집계</h2>
+            </div>
+
+            <label class="field compact-field">
+              <span>조회 일자</span>
+              <input id="dashboardDate" type="date">
+            </label>
+          </div>
+
+          <div class="daily-cards" id="dailyCards"></div>
+          <div class="table-wrap compact-wrap">
+            <table class="mini-table">
+              <thead>
+                <tr>
+                  <th>품목명</th>
+                  <th>입고</th>
+                  <th>출고</th>
+                  <th>순변동</th>
+                </tr>
+              </thead>
+              <tbody id="dailySummaryBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>입출고 내역</h2>
+            </div>
+          </div>
+
+          <div class="table-wrap compact-wrap">
+            <table class="mini-table">
+              <thead>
+                <tr>
+                  <th>일자</th>
+                  <th>시즌</th>
+                  <th>품목명</th>
+                  <th>사이즈</th>
+                  <th>구분</th>
+                  <th>수량</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </section>
+
+    <section class="app-page" data-page="overview">
+      <section class="hero-panel overview-hero">
+        <div class="panel-header dashboard-header">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h1>한눈에 재고보기</h1>
+            <p class="hero-copy">
+              카테고리별 재고를 표 형태로 모아 보여주는 2페이지입니다.
+              입출고를 반영하면 여기 재고표도 함께 업데이트됩니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="overview-grid" id="overviewGrid"></section>
+    </section>
+
+    <section class="app-page" data-page="alerts">
+      <section class="hero-panel overview-hero">
+        <div class="panel-header dashboard-header">
+          <div>
+            <p class="eyebrow">Low Stock</p>
+            <h1>재고 주의 품목</h1>
+            <p class="hero-copy">
+              현재 재고가 10개 미만인 품목만 모아보는 3페이지입니다.
+              사이즈별로 부족한 재고를 바로 확인할 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="overview-grid">
+        <article class="overview-card">
+          <p class="eyebrow">Alert Table</p>
+          <h2>재고 10개 미만 목록</h2>
+          <div class="overview-total" id="lowStockSummary"></div>
+          <div class="table-wrap">
+            <table class="mini-table">
+              <thead>
+                <tr>
+                  <th>카테고리</th>
+                  <th>구분</th>
+                  <th>품목명</th>
+                  <th>사이즈</th>
+                  <th>현재재고</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="lowStockBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
