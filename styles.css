@@ -620,6 +620,37 @@ tbody tr:hover {
   line-height: 1.45;
 }
 
+.inventory-name-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drag-handle {
+  color: var(--muted);
+  font-size: 0.88rem;
+  letter-spacing: -0.1em;
+  cursor: grab;
+  user-select: none;
+}
+
+.inventory-row-draggable .inventory-name {
+  cursor: grab;
+  user-select: none;
+}
+
+.inventory-row-draggable.is-dragging {
+  opacity: 0.45;
+}
+
+.inventory-row-draggable.is-drop-target-before td {
+  box-shadow: inset 0 3px 0 rgba(111, 82, 64, 0.5);
+}
+
+.inventory-row-draggable.is-drop-target-after td {
+  box-shadow: inset 0 -3px 0 rgba(111, 82, 64, 0.5);
+}
+
 .row-input {
   width: 92px;
   min-height: 36px;
@@ -730,6 +761,37 @@ tbody tr:hover {
   cursor: pointer;
 }
 
+.sort-header-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sort-header-button.is-active {
+  color: #7f5639;
+}
+
+.sort-arrows {
+  min-width: 18px;
+  text-align: right;
+  color: #9b8f87;
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.sort-header-button.is-active .sort-arrows {
+  color: #7f5639;
+}
+
 .icon-button {
   width: 36px;
   height: 36px;
@@ -748,6 +810,41 @@ tbody tr:hover {
   border: 1px solid rgba(25, 25, 25, 0.08);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.archived-alerts[hidden] {
+  display: none !important;
+}
+
+.archived-alerts-toggle-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin: 12px 0 8px;
+}
+
+.archived-toggle-button {
+  min-width: 132px;
+  min-height: 72px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid rgba(25, 25, 25, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.archived-toggle-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.archived-toggle-icon {
+  font-size: 1.8rem;
+  line-height: 1;
 }
 
 .archived-alerts-header {
