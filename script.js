@@ -213,6 +213,9 @@ const lowStockSummary = document.getElementById("lowStockSummary");
 const transactionDateInput = document.getElementById("transactionDate");
 const dashboardDateInput = document.getElementById("dashboardDate");
 const resetDateButton = document.getElementById("resetDateButton");
+const applyAllButton = document.getElementById("applyAllButton");
+const historyYearSelect = document.getElementById("historyYear");
+const historyMonthSelect = document.getElementById("historyMonth");
 const prevPageButton = document.getElementById("prevPageButton");
 const nextPageButton = document.getElementById("nextPageButton");
 const pageLabel = document.getElementById("pageLabel");
@@ -236,6 +239,8 @@ let state = loadState();
 let expandedCategory = localStorage.getItem(EXPANDED_STORAGE_KEY) || state.ui?.expandedCategory || "";
 let currentPage = localStorage.getItem(PAGE_STORAGE_KEY) || state.ui?.currentPage || "manage";
 let currentSeason = localStorage.getItem(SEASON_STORAGE_KEY) || state.ui?.currentSeason || "26SS";
+let currentHistoryYear = "all";
+let currentHistoryMonth = "all";
 let remoteSubscription = null;
 let isRemoteRefreshing = false;
 let isAuthenticated = sessionStorage.getItem(AUTH_STORAGE_KEY) === "true";
@@ -367,6 +372,24 @@ function createItemFromDefinition(product, index) {
     initialStock: createStockMap(product.initialStock ?? DEFAULT_STOCK, productSizes),
     displayOrder: index
   };
+}
+
+const PRODUCT_META_BY_ID = new Map(
+  PRODUCT_DEFINITIONS.map((product, index) => {
+    const item = createItemFromDefinition(product, index);
+    return [item.id, {
+      displayOrder: index,
+      familyName: item.familyName,
+      baseName: item.baseName,
+      season: item.season,
+      category: item.category,
+      color: item.color
+    }];
+  })
+);
+
+function getDefinitionMetaById(itemId) {
+  return PRODUCT_META_BY_ID.get(itemId) || null;
 }
 
 function getFamilyName(name) {
@@ -591,10 +614,12 @@ function mapItemToRemoteRow(item) {
 
 function mapItemFromRemoteRow(row) {
   const sizeInfo = getInlineSizeInfo(row.base_name || row.name, row.category, Boolean(row.one_size));
+  const definitionMeta = getDefinitionMetaById(row.id);
   const inferredConfig = inferItemConfig({
     season: row.season,
     category: row.category,
     baseName: sizeInfo.displayName,
+    familyName: getFamilyName(sizeInfo.displayName),
     color: row.color,
     oneSize: Boolean(row.one_size)
   });
@@ -602,13 +627,21 @@ function mapItemFromRemoteRow(row) {
     id: row.id,
     name: row.color && row.color !== "기본" ? `${sizeInfo.displayName} (${row.color})` : sizeInfo.displayName,
     baseName: sizeInfo.displayName,
+    familyName: definitionMeta?.familyName || getFamilyName(sizeInfo.displayName),
     color: row.color,
     season: row.season,
     category: row.category,
     oneSize: inferredConfig.sizes.length === 1 && inferredConfig.sizes[0] === ONE_SIZE,
     sizes: inferredConfig.sizes,
     sizeLabel: inferredConfig.sizeLabel,
-    initialStock: normalizeStockMap(row.initial_stock, { sizes: inferredConfig.sizes, oneSize: inferredConfig.sizes.length === 1 && inferredConfig.sizes[0] === ONE_SIZE })
+    initialStock: normalizeStockMap(row.initial_stock, { sizes: inferredConfig.sizes, oneSize: inferredConfig.sizes.length === 1 && inferredConfig.sizes[0] === ONE_SIZE }),
+    displayOrder: definitionMeta?.displayOrder ?? PRODUCT_DEFINITIONS.findIndex((product) => {
+      const productSizeInfo = getInlineSizeInfo(product.name, product.category, Boolean(product.oneSize));
+      return product.season === row.season
+        && product.category === row.category
+        && productSizeInfo.displayName === sizeInfo.displayName
+        && product.color === row.color;
+    })
   };
 }
 
@@ -826,11 +859,34 @@ function getItemTotalStock(itemId) {
 }
 
 function sortItemsForDisplay(items) {
-  return [...items].sort((a, b) => {
-    const aOrder = Number.isInteger(a.displayOrder) && a.displayOrder >= 0 ? a.displayOrder : Number.MAX_SAFE_INTEGER;
-    const bOrder = Number.isInteger(b.displayOrder) && b.displayOrder >= 0 ? b.displayOrder : Number.MAX_SAFE_INTEGER;
-    return aOrder - bOrder;
+  const groups = new Map();
+
+  items.forEach((item) => {
+    const groupKey = item.familyName || item.baseName || getFamilyName(item.name || "");
+    const displayOrder = Number.isInteger(item.displayOrder) && item.displayOrder >= 0
+      ? item.displayOrder
+      : Number.MAX_SAFE_INTEGER;
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        groupKey,
+        firstOrder: displayOrder,
+        items: []
+      });
+    }
+
+    const group = groups.get(groupKey);
+    group.firstOrder = Math.min(group.firstOrder, displayOrder);
+    group.items.push(item);
   });
+
+  return [...groups.values()]
+    .sort((a, b) => a.firstOrder - b.firstOrder || a.groupKey.localeCompare(b.groupKey))
+    .flatMap((group) => group.items.sort((a, b) => {
+      const aOrder = Number.isInteger(a.displayOrder) && a.displayOrder >= 0 ? a.displayOrder : Number.MAX_SAFE_INTEGER;
+      const bOrder = Number.isInteger(b.displayOrder) && b.displayOrder >= 0 ? b.displayOrder : Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || (a.color || "").localeCompare(b.color || "");
+    }));
 }
 
 function getRowGroupClass(previousItem, currentItem, season, category) {
@@ -838,11 +894,10 @@ function getRowGroupClass(previousItem, currentItem, season, category) {
     return "";
   }
 
-  if (season === "25SS" && (category === "롱슬리브" || category === "맨투맨")) {
-    return previousItem.color !== currentItem.color ? "color-group-start" : "";
-  }
+  const previousGroup = previousItem.familyName || previousItem.baseName || getFamilyName(previousItem.name || "");
+  const currentGroup = currentItem.familyName || currentItem.baseName || getFamilyName(currentItem.name || "");
 
-  return previousItem.familyName !== currentItem.familyName ? "design-group-start" : "";
+  return previousGroup !== currentGroup ? "design-group-start" : "";
 }
 
 function getSeasonBlocksForCategory(category) {
@@ -1590,13 +1645,59 @@ function buildDailyDashboard() {
   `).join("");
 }
 
+function getHistoryFilterOptions() {
+  const years = [];
+
+  for (let year = 2026; year <= 2050; year += 1) {
+    years.push(String(year));
+  }
+
+  return { years };
+}
+
+function syncHistoryFilterControls() {
+  if (!historyYearSelect || !historyMonthSelect) {
+    return;
+  }
+
+  const { years } = getHistoryFilterOptions();
+
+  if (currentHistoryYear !== "all" && !years.includes(currentHistoryYear)) {
+    currentHistoryYear = "all";
+  }
+
+  const yearOptions = [
+    `<option value="all"${currentHistoryYear === "all" ? " selected" : ""}>전체</option>`,
+    ...years.map((year) => `<option value="${year}"${currentHistoryYear === year ? " selected" : ""}>${year}년</option>`)
+  ];
+
+  const monthOptions = [
+    `<option value="all"${currentHistoryMonth === "all" ? " selected" : ""}>전체</option>`,
+    ...Array.from({ length: 12 }, (_, index) => {
+      const value = String(index + 1).padStart(2, "0");
+      return `<option value="${value}"${currentHistoryMonth === value ? " selected" : ""}>${index + 1}월</option>`;
+    })
+  ];
+
+  historyYearSelect.innerHTML = yearOptions.join("");
+  historyMonthSelect.innerHTML = monthOptions.join("");
+}
+
 function buildHistoryTable() {
+  syncHistoryFilterControls();
+
   const rows = state.transactions
+    .filter((transaction) => {
+      const [year, month] = (transaction.date || "").split("-");
+      const yearMatched = currentHistoryYear === "all" || year === currentHistoryYear;
+      const monthMatched = currentHistoryMonth === "all" || month === currentHistoryMonth;
+      return yearMatched && monthMatched;
+    })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 80);
 
   if (rows.length === 0) {
-    historyBody.innerHTML = `<tr><td class="empty-state" colspan="6">아직 저장된 입출고 기록이 없습니다.</td></tr>`;
+    historyBody.innerHTML = `<tr><td class="empty-state" colspan="6">선택한 연도/월에 해당하는 입출고 기록이 없습니다.</td></tr>`;
     return;
   }
 
@@ -1652,6 +1753,116 @@ function clearRowInputs(itemId) {
   });
 }
 
+function getPendingEntriesForItem(itemId) {
+  const item = state.items.find((entry) => entry.id === itemId);
+  if (!item) {
+    return null;
+  }
+
+  return {
+    item,
+    entries: getItemSizes(item).map((size) => ({
+      size,
+      inbound: Number(document.querySelector(`input[data-item-id="${itemId}"][data-input-type="in"][data-size="${size}"]`)?.value || 0),
+      outbound: Number(document.querySelector(`input[data-item-id="${itemId}"][data-input-type="out"][data-size="${size}"]`)?.value || 0)
+    }))
+  };
+}
+
+function buildTransactionsForItem(itemId, transactionDate) {
+  const pending = getPendingEntriesForItem(itemId);
+  if (!pending) {
+    return { item: null, transactions: [], hasInput: false };
+  }
+
+  const { item, entries } = pending;
+  const hasInput = entries.some((entry) => entry.inbound > 0 || entry.outbound > 0);
+
+  if (!hasInput) {
+    return { item, transactions: [], hasInput: false };
+  }
+
+  for (const entry of entries) {
+    if (!Number.isInteger(entry.inbound) || !Number.isInteger(entry.outbound) || entry.inbound < 0 || entry.outbound < 0) {
+      window.alert("수량은 0 이상의 정수만 입력할 수 있습니다.");
+      return null;
+    }
+
+    const currentStock = getCurrentStock(itemId, entry.size);
+    if (entry.outbound > currentStock + entry.inbound) {
+      window.alert(`${entry.size} 사이즈 출고 수량이 현재 처리 가능한 재고보다 많습니다.`);
+      return null;
+    }
+  }
+
+  const createdAt = new Date().toISOString();
+  const transactions = [];
+
+  for (const entry of entries) {
+    if (entry.inbound > 0) {
+      transactions.push({
+        id: `${itemId}-${entry.size}-in-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
+        itemId,
+        size: entry.size,
+        type: "in",
+        quantity: entry.inbound,
+        date: transactionDate,
+        createdAt
+      });
+    }
+
+    if (entry.outbound > 0) {
+      transactions.push({
+        id: `${itemId}-${entry.size}-out-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
+        itemId,
+        size: entry.size,
+        type: "out",
+        quantity: entry.outbound,
+        date: transactionDate,
+        createdAt
+      });
+    }
+  }
+
+  return { item, transactions, hasInput: true };
+}
+
+async function applyTransactionsForItems(itemIds, emptyMessage) {
+  const transactionDate = transactionDateInput.value || today;
+  const itemMetas = [];
+  const nextTransactions = [];
+
+  for (const itemId of itemIds) {
+    const result = buildTransactionsForItem(itemId, transactionDate);
+    if (result === null) {
+      return;
+    }
+
+    if (!result.hasInput) {
+      continue;
+    }
+
+    itemMetas.push(result.item);
+    nextTransactions.push(...result.transactions);
+  }
+
+  if (nextTransactions.length === 0) {
+    window.alert(emptyMessage);
+    return;
+  }
+
+  state.transactions = [...state.transactions, ...nextTransactions];
+  await insertTransactionsToRemote(nextTransactions);
+
+  const lastItem = itemMetas[itemMetas.length - 1];
+  expandedCategory = lastItem ? lastItem.category : expandedCategory;
+  currentSeason = lastItem ? lastItem.season : currentSeason;
+
+  itemIds.forEach(clearRowInputs);
+  saveState();
+  render();
+}
+
 async function saveInitialStock(itemId) {
   const itemIndex = state.items.findIndex((entry) => entry.id === itemId);
   if (itemIndex === -1) {
@@ -1683,69 +1894,15 @@ async function saveInitialStock(itemId) {
 }
 
 async function addTransaction(itemId) {
-  const transactionDate = transactionDateInput.value || today;
-  const item = state.items.find((entry) => entry.id === itemId);
-  const entries = getItemSizes(item).map((size) => ({
-    size,
-    inbound: Number(document.querySelector(`input[data-item-id="${itemId}"][data-input-type="in"][data-size="${size}"]`)?.value || 0),
-    outbound: Number(document.querySelector(`input[data-item-id="${itemId}"][data-input-type="out"][data-size="${size}"]`)?.value || 0)
-  }));
+  await applyTransactionsForItems([itemId], "입고 또는 출고 수량을 입력해 주세요.");
+}
 
-  if (entries.every((entry) => entry.inbound <= 0 && entry.outbound <= 0)) {
-    window.alert("입고 또는 출고 수량을 입력해 주세요.");
-    return;
-  }
-
-  for (const entry of entries) {
-    if (!Number.isInteger(entry.inbound) || !Number.isInteger(entry.outbound) || entry.inbound < 0 || entry.outbound < 0) {
-      window.alert("수량은 0 이상의 정수만 입력할 수 있습니다.");
-      return;
-    }
-
-    const currentStock = getCurrentStock(itemId, entry.size);
-    if (entry.outbound > currentStock + entry.inbound) {
-      window.alert(`${entry.size} 사이즈 출고 수량이 현재 처리 가능한 재고보다 많습니다.`);
-      return;
-    }
-  }
-
-  const createdAt = new Date().toISOString();
-  const nextTransactions = [];
-
-  for (const entry of entries) {
-    if (entry.inbound > 0) {
-      nextTransactions.push({
-        id: `${itemId}-${entry.size}-in-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
-        itemId,
-        size: entry.size,
-        type: "in",
-        quantity: entry.inbound,
-        date: transactionDate,
-        createdAt
-      });
-    }
-
-    if (entry.outbound > 0) {
-      nextTransactions.push({
-        id: `${itemId}-${entry.size}-out-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
-        itemId,
-        size: entry.size,
-        type: "out",
-        quantity: entry.outbound,
-        date: transactionDate,
-        createdAt
-      });
-    }
-  }
-
-  state.transactions = [...state.transactions, ...nextTransactions];
-  await insertTransactionsToRemote(nextTransactions);
-  const itemMeta = state.items.find((item) => item.id === itemId);
-  expandedCategory = itemMeta ? itemMeta.category : expandedCategory;
-  currentSeason = itemMeta ? itemMeta.season : currentSeason;
-  saveState();
-  clearRowInputs(itemId);
-  render();
+function getVisibleInventoryItemIds() {
+  return [...new Set(
+    [...inventoryCategories.querySelectorAll("[data-action='apply'][data-item-id]")]
+      .map((button) => button.dataset.itemId)
+      .filter(Boolean)
+  )];
 }
 
 inventoryCategories.addEventListener("click", (event) => {
@@ -1767,6 +1924,11 @@ inventoryCategories.addEventListener("click", (event) => {
   if (target.dataset.action === "apply") {
     void addTransaction(target.dataset.itemId);
   }
+});
+
+applyAllButton.addEventListener("click", async () => {
+  const itemIds = getVisibleInventoryItemIds();
+  await applyTransactionsForItems(itemIds, "현재 화면에서 저장할 입고/출고 수량이 없습니다.");
 });
 
 document.addEventListener("click", (event) => {
@@ -1794,6 +1956,15 @@ document.addEventListener("click", (event) => {
 });
 
 dashboardDateInput.addEventListener("change", buildDailyDashboard);
+historyYearSelect.addEventListener("change", () => {
+  currentHistoryYear = historyYearSelect.value || "all";
+  buildHistoryTable();
+});
+
+historyMonthSelect.addEventListener("change", () => {
+  currentHistoryMonth = historyMonthSelect.value || "all";
+  buildHistoryTable();
+});
 
 lowStockBody.addEventListener("click", (event) => {
   const rawTarget = event.target;
