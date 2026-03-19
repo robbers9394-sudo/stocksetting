@@ -173,7 +173,13 @@
           <p class="eyebrow">Alert Table</p>
           <h2>재고 10개 미만 목록</h2>
           <div class="overview-total" id="lowStockSummary"></div>
-          <div class="archived-alerts" id="archivedLowStockList"></div>
+          <div class="archived-alerts-toggle-wrap">
+            <button id="archivedLowStockToggle" class="archived-toggle-button" type="button" aria-expanded="false" aria-controls="archivedLowStockList">
+              <span class="archived-toggle-icon">🗑</span>
+              <span id="archivedLowStockToggleLabel">숨김 품목 보기</span>
+            </button>
+          </div>
+          <div class="archived-alerts" id="archivedLowStockList" hidden></div>
           <div class="table-wrap">
             <table class="mini-table">
               <thead>
