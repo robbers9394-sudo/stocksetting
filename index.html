@@ -63,6 +63,9 @@
           </div>
         </div>
         <div class="category-stack" id="inventoryCategories"></div>
+        <div class="panel-actions">
+          <button id="applyAllButton" class="action-button" type="button">입출고 전체 저장</button>
+        </div>
       </section>
 
       <section class="dashboard-grid">
@@ -100,6 +103,17 @@
             <div>
               <p class="eyebrow">History</p>
               <h2>입출고 내역</h2>
+            </div>
+
+            <div class="history-filters">
+              <label class="field compact-field history-filter">
+                <span>연도</span>
+                <select id="historyYear"></select>
+              </label>
+              <label class="field compact-field history-filter">
+                <span>월</span>
+                <select id="historyMonth"></select>
+              </label>
             </div>
           </div>
 
